@@ -152,12 +152,13 @@ def plot_graph(latencies: list[float], analyzed_results: dict, target: str, save
 # ==============================================================================
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Measure network stability with detailed statistics and optional plotting.")
-    parser.add_argument("target", help="The hostname or IP address to ping.")
-    parser.add_argument("count", type=int, help="The number of times to ping.")
+    parser.add_argument("--target", "-t", default="www.rakuten.co.jp", help="The hostname or IP address to ping. Default= www.rakuten.co.jp")
+    parser.add_argument("--count", "-c", default=20, type=int, help="The number of times to ping. Default= 20")
     parser.add_argument("--plot", action="store_true", help="Display an interactive plot of the results.")
     parser.add_argument("--save", metavar="FILENAME", help="Save the plot to a file (e.g., plot.png).")
     
     args = parser.parse_args()
+    print(args)
 
     if args.count < 10:
         print("Error: Ping count must be at least 10 for meaningful statistics.", file=sys.stderr)
