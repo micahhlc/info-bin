@@ -3,16 +3,21 @@
 # A script to measure network stability by calculating latency percentiles (p50, p90, p95, p99).
 # It requires a hostname and ping count, and displays a real-time progress bar.
 
-# --- Step 1: Validate Input Parameters ---
-if [ "$#" -ne 2 ]; then
-    echo "Error: Incorrect number of arguments." >&2
-    echo "Usage: $0 <hostname> <count>" >&2
-    echo "Example: $0 www.rakuten.co.jp 100" >&2
-    exit 1
-fi
+# --- Step 1: Set Default and User-Provided Parameters ---
+DEFAULT_TARGET="www.rakuten.co.jp"
+DEFAULT_COUNT=20
 
-TARGET=$1
-COUNT=$2
+# for below usage. 
+# ${...}: This is the expansion syntax. It's more powerful than just using $1.
+# 1: This refers to the first argument passed to the script.
+# :-: This is the key operator. It means: "if the variable on the left (1) is unset or empty, then use the value on the right."
+
+# Use user's input if provided ($1), otherwise use the default.
+TARGET=${1:-$DEFAULT_TARGET}
+# Use user's input if provided ($2), otherwise use the default.
+COUNT=${2:-$DEFAULT_COUNT}
+
+
 
 # Check if COUNT is a valid number >= 10 for meaningful stats.
 if ! [[ "$COUNT" =~ ^[0-9]+$ ]] || [ "$COUNT" -lt 10 ]; then

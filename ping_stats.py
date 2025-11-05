@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+#!/Users/micah.cheng/anaconda3/bin/python
+## !/usr/bin/env python3
 
 import subprocess #Runs external commands (like ping) from within the Python script.
 import re #Finds patterns in text using "Regular Expressions" (used here to find time=...).
@@ -20,6 +21,7 @@ def conduct_ping_test(target: str, count: int) -> list[float]:
         Returns an empty list if no pings succeed.
     """
     print("--- Conducting Ping Test ---")
+    print(f"Pinging {target} {count} times...")
     print(f"Pinging {target} {count} times...")
     
     ping_command = ["ping", "-c", str(count), target]
