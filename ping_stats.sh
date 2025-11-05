@@ -5,7 +5,7 @@
 
 # --- Step 1: Set Default and User-Provided Parameters ---
 DEFAULT_TARGET="www.rakuten.co.jp"
-DEFAULT_COUNT=20
+DEFAULT_COUNT=10
 
 # for below usage. 
 # ${...}: This is the expansion syntax. It's more powerful than just using $1.
@@ -58,8 +58,9 @@ echo ""
 
 # Get the standard summary from the captured output file.
 echo "--- Standard Ping Summary ---"
-tail -n 4 "$PING_OUTPUT_FILE"
+tail -n 3 "$PING_OUTPUT_FILE"
 echo "-----------------------------"
+echo ""
 
 # Count how many successful pings we logged.
 SUCCESS_COUNT=$(wc -l < "$LATENCY_FILE" | tr -d ' ')
@@ -89,7 +90,7 @@ P90=$(calculate_percentile "$SORTED_LATENCIES" "$SUCCESS_COUNT" 90)
 P95=$(calculate_percentile "$SORTED_LATENCIES" "$SUCCESS_COUNT" 95)
 P99=$(calculate_percentile "$SORTED_LATENCIES" "$SUCCESS_COUNT" 99)
 
-echo "\n--- Enhanced Stability Analysis (Percentiles) ---"
+echo "--- Enhanced Stability Analysis (Percentiles) ---"
 printf "Median Latency (p50):      %8.3f ms   (50%% of pings were faster than this)\n" "$P50"
 printf "90th Percentile (p90):     %8.3f ms   (90%% of pings were faster than this)\n" "$P90"
 printf "95th Percentile (p95):     %8.3f ms   (95%% of pings were faster than this)\n" "$P95"

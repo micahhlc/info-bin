@@ -21,9 +21,10 @@ def conduct_ping_test(target: str, count: int) -> list[float]:
         Returns an empty list if no pings succeed.
     """
     print("--- Conducting Ping Test ---")
-    print(f"Pinging {target} {count} times...")
-    print(f"Pinging {target} {count} times...")
-    
+    print(f"Target: {target} ")
+    print(f"Pinging: {count} times")
+    print(f"Progress: ", end='', flush= True)
+
     ping_command = ["ping", "-c", str(count), target]
     latencies = []
     
@@ -52,9 +53,9 @@ def conduct_ping_test(target: str, count: int) -> list[float]:
     except FileNotFoundError:
         print("Error: 'ping' command not found.", file=sys.stderr)
         sys.exit(1)
-    print(f"Ping test complete. {len(latencies)} successful pings recorded.")
-    print(latencies)
-    print("\n\n")
+    print(f" Done.\n")
+    # print(f"Ping test complete. {len(latencies)} successful pings recorded.")
+    # print(latencies)
     return latencies
 
 
@@ -68,7 +69,7 @@ def analyze_ping_results(latencies: list[float]) -> dict:
     Returns:
         A dictionary containing all calculated statistics (min, max, avg, std, percentiles).
     """
-    print("--- Analyzing Ping Results ---")
+    # print("--- Analyzing Ping Results ---")
     if not latencies:
         return {}
 
@@ -85,8 +86,8 @@ def analyze_ping_results(latencies: list[float]) -> dict:
         'p95': np.percentile(latencies_np, 95),
         'p99': np.percentile(latencies_np, 99),
     }
-    print("Analysis complete.")
-    print("\n\n")
+    # print("Analysis complete.")
+    # print("\n\n")
     return stats
 
 
