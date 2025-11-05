@@ -1,6 +1,3 @@
-# To update your path env
+This folder is to keep self made script for various matter. 
 
-vim ~/.zprofile
-
-source ~/.zprofile
 
