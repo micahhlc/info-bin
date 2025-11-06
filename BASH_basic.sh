@@ -1,3 +1,6 @@
+# Below is samples only on bash syntax. 
+# below should not be run. 
+
 name="Micah"
 age=43
 city="Tokyo"
@@ -80,6 +83,7 @@ echo "remove spaces" | tr -d ' '    # delete spaces
 
 echo "name,age,city" | cut -d',' -f2   # output: age
 cut -d':' -f1 /etc/passwd              # print usernames
+
 
 awk '{print $1}' file.txt              # print first column
 awk -F, '{print $2}' data.csv          # specify comma delimiter
