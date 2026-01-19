@@ -1,3 +1,7 @@
+# Ignore folder
+/.claude/
+/results/
+
 # Ignore general files
 .DS_Store
 .replit
