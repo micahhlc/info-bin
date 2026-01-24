@@ -27,10 +27,23 @@ echo "Source:      $SOURCE"
 echo "Destination: $DEST"
 echo
 
-rsync -avh --delete --progress \
+# WARNING regarding iCloud:
+# If files are "optimized" (not stored locally), this script will force a download
+# of ALL files to your local Mac before transferring. ensure you have enough disk space!
+
+# Flags explanation:
+# -a: archive mode (recursive, preserves times, etc.)
+# -v: verbose
+# -h: human-readable numbers
+# -P: shows progress AND allows resuming interrupted files (partial)
+# --no-perms --no-owner --no-group: prevents errors on Google Drive/Fat32/ExFAT drives
+
+rsync -avhP --no-perms --no-owner --no-group \
   --exclude="Photos Library.photoslibrary" \
   --exclude=".DS_Store" \
   "$SOURCE"/ "$DEST"/
+  # --delete \   <-- UNCOMMENT CAREFULLY: This deletes files in Dest that aren't in Source
+  # --dry-run \  <-- OPTIONAL: Uncomment to see what would happen without copying
 
 echo
 echo "done."
