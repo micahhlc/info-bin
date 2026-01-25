@@ -1,4 +1,29 @@
 #!/usr/bin/env python3
+"""
+=============================================================================
+ SMART RSYNC MANAGER
+=============================================================================
+1. WHAT IS IT?
+   A smart Python wrapper for 'rsync'. It runs your transfers with a clean, 
+   modern UI (no scrolling text wall), captures errors for a final summary, 
+   and performs an AUTOMATIC POST-SYNC AUDIT to verify exactly which files 
+   are Missing or Extra.
+
+2. PREREQUISITES
+   - Python 3 (Included on macOS).
+   - Modern 'rsync' (v3.1+) recommended for progress bars.
+     Install via: brew install rsync
+
+3. HOW TO USE
+   Run from terminal:
+   ./rsync.py /path/to/source /path/to/dest
+
+   IMPORTANT - TRAILING SLASH BEHAVIOR:
+   - Source ends with / (e.g. /Pictures/): Copies CONTENTS of Pictures into Dest.
+   - Source NO slash    (e.g. /Pictures):  Copies the FOLDER Pictures into Dest.
+
+=============================================================================
+"""
 import sys
 import os
 import subprocess
@@ -33,6 +58,9 @@ UP = "\033[A"
 # =============================================================================
 # UTILS
 # =============================================================================
+# =============================================================================
+# UTILS & UI
+# =============================================================================
 def print_banner(source, dest, mode="SYNC"):
     print(f"{BOLD}============================================================{RESET}")
     print(f" {BOLD}🐍 Python Smart Rsync Manager{RESET} | Mode: {mode}")
@@ -41,24 +69,19 @@ def print_banner(source, dest, mode="SYNC"):
     print(f" {BOLD}Dest:  {RESET} {dest}")
     print(f" {BOLD}Rsync: {RESET} {RSYNC_EXEC}")
     print(f"============================================================\n")
+    print_legend()
 
-def human_size(bytes_val):
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if bytes_val < 1024.0:
-            return f"{bytes_val:.2f} {unit}"
-        bytes_val /= 1024.0
-    return f"{bytes_val:.2f} TB"
+def print_legend():
+    print(f"{BOLD}LEGEND:{RESET}")
+    print(f" ⏳ Starting   ✅ Success   ❌ Error/Failure   ⚠️  Warning")
+    print(f" {BOLD}xfr#:{RESET} File Transfer Count   {BOLD}ir-chk:{RESET} Checked/Total Files (Indexing)")
+    print(f"============================================================\n")
 
 # =============================================================================
-# MAIN SYNC LOGIC
+# CORE LOGIC
 # =============================================================================
-def run_sync(source, dest, dry_run=False):
+def build_rsync_cmd(source, dest, dry_run=False):
     # Construct Rsync Command
-    # -a: archive
-    # --partial: resume support
-    # --no-perms etc: filesystem compatibility
-    # --info=progress2: Total progress info
-    # -v: Verbose (We need this to capture filenames, but we suppress them from UI)
     cmd = [
         RSYNC_EXEC, "-a", "--partial", "--no-perms", "--no-owner", "--no-group",
         "--info=progress2", "-v", 
@@ -66,20 +89,37 @@ def run_sync(source, dest, dry_run=False):
         "--exclude=.DS_Store"
     ]
     
-    # Slash Logic (Match bash script behavior)
-    # If source ends with /, rsync copies contents.
-    # If source usually doesn't, rsync copies folder.
-    # Python script passes arguments exactly as provided.
+    # Slash Logic (Pass verbatim so user controls folder vs content)
     cmd.append(source)
-    
-    # Dest usually needs slash stripped by convention in scripts, 
-    # but rsync handles dest slash fine. We'll strip for consistency.
+    # Dest slash usually irrelevant, strip strictly for consistency
     cmd.append(dest.rstrip('/'))
 
     if dry_run:
         cmd.insert(1, "-n")
         print(f"{YELLOW}[DRY RUN] Executing: {' '.join(cmd)}{RESET}")
+    
+    return cmd
 
+def update_ui_status(filename, progress_line):
+    # Move up 1 line, Clear, Print Filename
+    sys.stdout.write(f"\r{UP}{CLEAR_LINE}")
+    # Truncate filename nicely if too long
+    display_name = (filename[:75] + '..') if len(filename) > 75 else filename
+    sys.stdout.write(f"{BOLD}File:{RESET} {display_name}\n") 
+    
+    # Print Progress Line
+    sys.stdout.write(f"{CLEAR_LINE}{GREEN}{progress_line}{RESET}")
+    sys.stdout.flush()
+
+def print_error_alert(line):
+    # Print error immediately above the status area
+    sys.stdout.write(f"\r{UP}{CLEAR_LINE}") 
+    sys.stdout.write(f"{RED}❌ {line}{RESET}\n\n") # Push status down 2 lines to make room
+    sys.stdout.flush()
+
+def run_sync(source, dest, dry_run=False):
+    cmd = build_rsync_cmd(source, dest, dry_run)
+    
     # Launch Process
     process = subprocess.Popen(
         cmd,
@@ -90,14 +130,13 @@ def run_sync(source, dest, dry_run=False):
         universal_newlines=True
     )
 
-    # State
+    # State tracking
     errors = []
-    last_progress_line = ""
     current_file = "Initializing..."
     start_time = time.time()
     
     print(f"{CYAN}⏳ Starting Sync/Scan...{RESET}")
-    print("") # Spacer for UI
+    print("") # Reserve space for status UI
 
     try:
         while True:
@@ -109,40 +148,34 @@ def run_sync(source, dest, dry_run=False):
             if not line:
                 continue
 
-            # Check if it's a progress line
-            # Pattern: 1,024,000 12% 10.5MB/s 0:00:05 ...
+            # 1. Progress Line? (Contains % and xfr#)
             if "%" in line and "xfr#" in line:
-                last_progress_line = line
-                # Redraw Status Area
-                # Move up 1 line, Print Status, Newline, Print Progress
-                sys.stdout.write(f"\r{UP}{CLEAR_LINE}")
-                sys.stdout.write(f"{BOLD}File:{RESET} {current_file[:80]}\n") # Truncate file if long
-                sys.stdout.write(f"{CLEAR_LINE}{GREEN}{line}{RESET}")
-                sys.stdout.flush()
+                update_ui_status(current_file, line)
             
-            # Check if Error
-            elif "error" in line.lower() or "failed" in line.lower():
+            # 2. Error Line? (Strict check)
+            elif line.startswith("rsync:") or line.startswith("rsync error:") or "No space left" in line:
                 errors.append(line)
-                # Print error immediately above the status area
-                sys.stdout.write(f"\r{UP}{CLEAR_LINE}") 
-                sys.stdout.write(f"{RED}❌ {line}{RESET}\n\n") # Push status down
-                sys.stdout.flush()
+                print_error_alert(line)
 
-            # Otherwise, it's likely a filename (since we used -v)
-            # We don't print it to history, we just update 'current_file'
+            # 3. Filename? (Everything else)
             elif not line.startswith("sending incremental"):
-                 # Ignore the header lines
                  current_file = line
 
     except KeyboardInterrupt:
         print(f"\n\n{YELLOW}🛑 Operation cancelled by user.{RESET}")
         return
 
+    # Finish & Report
+    duration = time.time() - start_time
     return_code = process.poll()
-    end_time = time.time()
-    duration = end_time - start_time
+    
+    print_summary(duration, return_code, errors)
+    
+    # Post-Sync Audit
+    print("\n🔍 Running Post-Sync Verification & Audit...")
+    run_audit(source, dest)
 
-    # Final Report
+def print_summary(duration, return_code, errors):
     print(f"\n\n{BOLD}============================================================{RESET}")
     print(f" {BOLD}Summary{RESET}")
     print(f"============================================================")
@@ -159,36 +192,77 @@ def run_sync(source, dest, dry_run=False):
         print(f" {GREEN}✅ Sync Completed Successfully.{RESET}")
     else:
         print(f" {RED}❌ Rsync exited with code {return_code}{RESET}")
-    
-    # Post-Sync Extra File Check
-    print("\n🔍 Checking for extra files in Destination...")
-    check_extras(source, dest.rstrip('/'))
 
 # =============================================================================
-# EXTRA FILE CHECKER
+# AUDIT & VERIFICATION
 # =============================================================================
-def check_extras(source, dest):
+def run_audit(source, dest):
     # Force content comparison by ensuring trailing slashes
     src_clean = source.rstrip('/') + '/'
     dest_clean = dest.rstrip('/') + '/'
     
+    # We use -n (dry run) + -i (itemize) + --delete (to see extras)
     cmd = [
-        RSYNC_EXEC, "-avn", "--delete", "--ignore-errors", "--force",
+        RSYNC_EXEC, "-avn", "-i", "--delete", "--ignore-errors", "--force",
         src_clean, dest_clean
     ]
     
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     out, _ = proc.communicate()
     
-    # Count "deleting" lines
-    extras = [line for line in out.split('\n') if line.startswith('deleting ')]
-    count = len(extras)
+    lines = out.split('\n')
     
-    if count > 0:
-        print(f" {YELLOW}⚠️  Found {count} extra files in Destination.{RESET}")
-        print(f"    (Run ./rsync-compare.sh to view/cleanup)")
-    else:
-        print(f" {GREEN}✨ Destination is perfectly clean (Exact mirror).{RESET}")
+    # Parse rsync itemize output:
+    # >f+++++++++ : File missing in dest (Transfer needed)
+    # *deleting   : Extra file in dest
+    
+    missing = []
+    extras = []
+    
+    for line in lines:
+        if not line: continue
+        parts = line.split(' ', 1)
+        if len(parts) < 2: continue
+        
+        code = parts[0]
+        filename = parts[1]
+        
+        if line.startswith('*deleting'):
+             # "deleting filename" -> filename is the extra
+             extras.append(line.replace('*deleting   ', ''))
+        elif code.startswith('>f') and '+++++++++' in code:
+             # Purely new file transfer >f+++++++++
+             missing.append(filename)
+        # Note: We ignore changed files (.d..t...) to focus on Missing/Extra
+        
+    # REPORTING
+    if len(missing) == 0 and len(extras) == 0:
+        print(f" {GREEN}✨ Perfect Match! Source and Destination are identical.{RESET}")
+        return
+
+    print(f"{BOLD}------------------------------------------------------------{RESET}")
+    print(f" {BOLD}Audit Report{RESET}")
+    print(f"{BOLD}------------------------------------------------------------{RESET}")
+    
+    if len(missing) > 0:
+        print(f" {RED}❌ MISSING in Dest ({len(missing)} files):{RESET}")
+        print(f"    (These failed to copy or were skipped)")
+        for f in missing[:15]:
+            print(f"    - {f}")
+        if len(missing) > 15:
+            print(f"    ... and {len(missing)-15} more.")
+        print("")
+
+    if len(extras) > 0:
+        print(f" {YELLOW}⚠️  EXTRA in Dest ({len(extras)} files):{RESET}")
+        print(f"    (These exist in Dest but not Source)")
+        for f in extras[:15]:
+            print(f"    - {f}")
+        if len(extras) > 15:
+            print(f"    ... and {len(extras)-15} more.")
+        print("")
+        
+    print(f" {BOLD}Tip:{RESET} Use --delete to remove extras, or check errors for missing files.")
 
 
 if __name__ == "__main__":
