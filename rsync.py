@@ -6,8 +6,8 @@
 1. WHAT IS IT?
    A smart Python wrapper for 'rsync'. It runs your transfers with a clean, 
    modern UI (no scrolling text wall), captures errors for a final summary, 
-   and performs an AUTOMATIC POST-SYNC AUDIT to verify exactly which files 
-   are Missing or Extra.
+   performs an AUTOMATIC POST-SYNC AUDIT to verify exactly which files 
+   are Missing or Extra, and supports .rsyncignore files.
 
 2. PREREQUISITES
    - Python 3 (Included on macOS).
@@ -44,6 +44,18 @@ def find_rsync():
     return "rsync" # Fallback to path
 
 RSYNC_EXEC = find_rsync()
+IS_LEGACY_RSYNC = False
+if RSYNC_EXEC == "rsync" or RSYNC_EXEC.startswith("/usr/bin"):
+    # MacOS default rsync (2.6.9) behaves differently
+    try:
+        ver_chk = subprocess.run([RSYNC_EXEC, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if "version 2." in ver_chk.stdout:
+            IS_LEGACY_RSYNC = True
+    except:
+        IS_LEGACY_RSYNC = True
+
+if IS_LEGACY_RSYNC:
+    print(f"{YELLOW}⚠️  Legacy rsync detected (v2.x). Disabling modern progress bars & flags.{RESET}")
 
 # ANSI Colors
 CYAN = "\033[96m"
@@ -67,7 +79,7 @@ def print_banner(source, dest, mode="SYNC"):
     print(f"============================================================")
     print(f" {BOLD}Source:{RESET} {source}")
     print(f" {BOLD}Dest:  {RESET} {dest}")
-    print(f" {BOLD}Rsync: {RESET} {RSYNC_EXEC}")
+    print(f" {BOLD}Rsync: {RESET} {RSYNC_EXEC} {'(Legacy)' if IS_LEGACY_RSYNC else ''}")
     print(f"============================================================\n")
     print_legend()
 
@@ -80,14 +92,67 @@ def print_legend():
 # =============================================================================
 # CORE LOGIC
 # =============================================================================
-def build_rsync_cmd(source, dest, dry_run=False):
-    # Construct Rsync Command
-    cmd = [
-        RSYNC_EXEC, "-a", "--partial", "--no-perms", "--no-owner", "--no-group",
-        "--info=progress2", "-v", 
-        "--exclude=Photos Library.photoslibrary",
-        "--exclude=.DS_Store"
+def get_exclude_args(source_path):
+    """
+    Returns a list of rsync arguments for excluding files.
+    Checks for .rsyncignore/.gitignore in the SCRIPT directory (Global)
+    AND in the SOURCE directory (Local).
+    """
+    excludes = []
+    
+    # Locations to check
+    # 1. Source Directory (Local project ignores)
+    source_dir = source_path.rstrip('/')
+    
+    # 2. Script Directory (Global/Central ignores)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Candidates: (Path, Description)
+    candidates = [
+        (os.path.join(script_dir, ".rsyncignore"), "Global .rsyncignore"),
+        (os.path.join(script_dir, ".gitignore"),   "Global .gitignore"),
+        (os.path.join(source_dir, ".rsyncignore"), "Local .rsyncignore"),
+        (os.path.join(source_dir, ".gitignore"),   "Local .gitignore")
     ]
+    
+    found_any = False
+    for fpath, desc in candidates:
+        if os.path.isfile(fpath):
+            print(f"{CYAN}ℹ️  Using ignore file ({desc}): {fpath}{RESET}")
+            excludes.extend(["--exclude-from", fpath])
+            found_any = True
+            
+    if found_any:
+        return excludes
+    else:
+        # Default excludes ONLY if no files found anywhere
+        return [
+            "--exclude=Photos Library.photoslibrary",
+            "--exclude=.DS_Store",
+            "--exclude=.git",
+            "--exclude=node_modules"
+        ]
+
+def build_rsync_cmd(source, dest, dry_run=False, delete_flag=False):
+    # Construct Rsync Command
+    if IS_LEGACY_RSYNC:
+        # v2.6.9 compatibility:
+        # - No --info=progress2
+        # - No --no-perms style flags (use explicit -rltD instead of -a to skip perms/owner/group)
+        # We want: Recursive, Links, Times, Devices. NO Perms, NO Owner, NO Group.
+        cmd = [RSYNC_EXEC, "-rltD", "--partial", "-v"] 
+    else:
+        # Modern rsync
+        cmd = [
+            RSYNC_EXEC, "-a", "--partial", "--no-perms", "--no-owner", "--no-group",
+            "--info=progress2", "-v"
+        ]
+    
+    # Add Excludes
+    cmd.extend(get_exclude_args(source))
+    
+    if delete_flag:
+        cmd.append("--delete")
     
     # Slash Logic (Pass verbatim so user controls folder vs content)
     cmd.append(source)
@@ -117,17 +182,18 @@ def print_error_alert(line):
     sys.stdout.write(f"{RED}❌ {line}{RESET}\n\n") # Push status down 2 lines to make room
     sys.stdout.flush()
 
-def run_sync(source, dest, dry_run=False):
-    cmd = build_rsync_cmd(source, dest, dry_run)
+def run_sync(source, dest, dry_run=False, delete_flag=False):
+    cmd = build_rsync_cmd(source, dest, dry_run, delete_flag)
     
     # Launch Process
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,            # Line buffered
-        universal_newlines=True
+        text=True, # This uses default encoding, usually utf-8
+        bufsize=1, # Line buffered
+        universal_newlines=True,
+        errors='replace' # Handle encoding errors gracefully in the sync loop
     )
 
     # State tracking
@@ -196,19 +262,47 @@ def print_summary(duration, return_code, errors):
 # =============================================================================
 # AUDIT & VERIFICATION
 # =============================================================================
+# =============================================================================
+# AUDIT & VERIFICATION
+# =============================================================================
 def run_audit(source, dest):
-    # Force content comparison by ensuring trailing slashes
+    # Logic Correction:
+    # If source does NOT end with slash, rsync copies the FOLDER itself.
+    # So we must compare /Source/Contents vs /Dest/SourceFolder/Contents
+    
     src_clean = source.rstrip('/') + '/'
-    dest_clean = dest.rstrip('/') + '/'
+    
+    if not source.endswith('/'):
+        # Mode: Copying folder INTO dest
+        foldername = os.path.basename(source)
+        dest_clean = os.path.join(dest, foldername).rstrip('/') + '/'
+    else:
+        # Mode: Copying CONTENTS into dest
+        dest_clean = dest.rstrip('/') + '/'
     
     # We use -n (dry run) + -i (itemize) + --delete (to see extras)
-    cmd = [
-        RSYNC_EXEC, "-avn", "-i", "--delete", "--ignore-errors", "--force",
-        src_clean, dest_clean
-    ]
+    if IS_LEGACY_RSYNC:
+        # Legacy rsync (v2.6.9)
+        # Note: -i might work, but let's be safe. --delete works.
+        cmd = [RSYNC_EXEC, "-n", "-i", "-rltDv", "--delete", "--ignore-errors", "--force"]
+    else:
+        # Modern rsync
+        cmd = [RSYNC_EXEC, "-avn", "-i", "--delete", "--ignore-errors", "--force"]
     
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    out, _ = proc.communicate()
+    # Apply same excludes to Audit so we don't flag ignored files as Missing/Extra
+    cmd.extend(get_exclude_args(source))
+    
+    cmd.extend([src_clean, dest_clean])
+    
+    # Debug info if needed
+    # print(f"DEBUG AUDIT CMD: {' '.join(cmd)}")
+    
+    # Fix UnicodeDecodeError by using bytes and decoding manually
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=False)
+    out_bytes, _ = proc.communicate()
+    
+    # Robust decode
+    out = out_bytes.decode('utf-8', errors='replace')
     
     lines = out.split('\n')
     
@@ -267,11 +361,16 @@ def run_audit(source, dest):
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("Usage: python3 rsync.py /source /dest")
+        print("Usage: ./rsync.py /source /dest [--delete]")
         sys.exit(1)
         
     source_arg = sys.argv[1]
     dest_arg = sys.argv[2]
     
-    print_banner(source_arg, dest_arg)
-    run_sync(source_arg, dest_arg)
+    # Check for delete flag
+    enable_delete = "--delete" in sys.argv
+    
+    mode_str = "MIRROR (Deletion Enabled ⚠️ )" if enable_delete else "SAFE SYNC"
+    
+    print_banner(source_arg, dest_arg, mode=mode_str)
+    run_sync(source_arg, dest_arg, delete_flag=enable_delete)
