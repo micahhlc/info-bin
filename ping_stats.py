@@ -1,4 +1,4 @@
-#!/Users/micah.cheng/anaconda3/bin/python
+#!/Users/micah.cheng/.pyenv/shims/python
 ## !/usr/bin/env python3
 
 import subprocess #Runs external commands (like ping) from within the Python script.
