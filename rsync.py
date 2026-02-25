@@ -34,6 +34,16 @@ import re
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
+# ANSI Colors (defined early so they can be used anywhere)
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+RED = "\033[91m"
+RESET = "\033[0m"
+BOLD = "\033[1m"
+CLEAR_LINE = "\033[K"
+UP = "\033[A"
+
 # Helper to find rsync
 def find_rsync():
     # Prefer Homebrew rsync for progress features
@@ -56,16 +66,6 @@ if RSYNC_EXEC == "rsync" or RSYNC_EXEC.startswith("/usr/bin"):
 
 if IS_LEGACY_RSYNC:
     print(f"{YELLOW}⚠️  Legacy rsync detected (v2.x). Disabling modern progress bars & flags.{RESET}")
-
-# ANSI Colors
-CYAN = "\033[96m"
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-RED = "\033[91m"
-RESET = "\033[0m"
-BOLD = "\033[1m"
-CLEAR_LINE = "\033[K"
-UP = "\033[A"
 
 # =============================================================================
 # UTILS
