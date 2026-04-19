@@ -161,40 +161,208 @@ fi
 # Check mDNSResponder stability by uptime (not log parsing which gives false positives)
 # The previous method incorrectly counted log entries containing "start"
 
-# 9. Diagnosis & Recommendations
+# 9. Routing Table Audit (VPN route churn detection)
+echo -e "\n${BOLD}--- 9️⃣  Routing Table Audit ---${RESET}"
+
+DEFAULT_ROUTES=$(netstat -nr 2>/dev/null | grep "^default")
+DEFAULT_COUNT=$(echo "$DEFAULT_ROUTES" | grep -c "^default" || echo 0)
+
+echo "Default routes active: $DEFAULT_COUNT"
+
+# Healthy = 1 (en0) + up to 2 IPv6 link-locals for utun. >4 is a red flag.
+if [ "$DEFAULT_COUNT" -gt 4 ]; then
+    echo -e "[${RED}WARN${RESET}] $DEFAULT_COUNT default routes detected — VPN tunnel accumulation"
+    echo "  This causes periodic 'No route to host' blackouts every ~90 seconds"
+    echo "  as Netskope/Cisco rotate utun interfaces and briefly drop the route."
+    echo ""
+    echo "  Active default routes:"
+    echo "$DEFAULT_ROUTES" | while read -r line; do
+        iface=$(echo "$line" | awk '{print $NF}')
+        if echo "$line" | grep -q "en0"; then
+            echo -e "  [${GREEN} OK ${RESET}] $line  (WiFi — primary)"
+        else
+            echo -e "  [${YELLOW}WARN${RESET}] $line  (tunnel)"
+        fi
+    done
+    ROUTING_ISSUE=1
+else
+    echo -e "[${GREEN} OK ${RESET}] Routing table looks clean ($DEFAULT_COUNT default routes)"
+    echo "$DEFAULT_ROUTES" | sed 's/^/  /'
+    ROUTING_ISSUE=0
+fi
+
+# Count utun interfaces (each Netskope/Cisco session creates one; stale ones accumulate)
+UTUN_COUNT=$(ifconfig 2>/dev/null | grep -c "^utun")
+echo ""
+echo "Active utun (tunnel) interfaces: $UTUN_COUNT"
+if [ "$UTUN_COUNT" -gt 5 ]; then
+    echo -e "[${YELLOW}WARN${RESET}] $UTUN_COUNT utun interfaces — stale tunnels accumulating"
+    echo "  Normal: 2-3 (macOS creates utun0/utun1/utun2 for system use)"
+    echo "  Fix: Restart Netskope and Cisco to clean up stale interfaces"
+fi
+
+# 10. DNS Diagnostic
+echo -e "\n${BOLD}--- 🔟  DNS Diagnostic ---${RESET}"
+
+DNS_SERVERS=$(scutil --dns 2>/dev/null | grep "nameserver\[" | awk '{print $3}' | sort -u)
+echo "Active DNS servers:"
+DNS_ISSUES=0
+
+for ns in $DNS_SERVERS; do
+    # Test both A and AAAA response times (3 samples each)
+    a_times=()
+    aaaa_times=()
+    for i in 1 2 3; do
+        t=$(dig @"$ns" google.com A +timeout=3 +tries=1 2>&1 | grep "Query time" | awk '{print $4}')
+        [ -n "$t" ] && a_times+=("$t")
+        t=$(dig @"$ns" google.com AAAA +timeout=3 +tries=1 2>&1 | grep "Query time" | awk '{print $4}')
+        [ -n "$t" ] && aaaa_times+=("$t")
+    done
+
+    # Calculate averages
+    if [ ${#a_times[@]} -gt 0 ]; then
+        a_avg=$(echo "${a_times[@]}" | tr ' ' '\n' | awk '{s+=$1}END{printf "%d", s/NR}')
+        a_max=$(echo "${a_times[@]}" | tr ' ' '\n' | sort -n | tail -1)
+    else
+        a_avg="timeout"; a_max="timeout"
+    fi
+    if [ ${#aaaa_times[@]} -gt 0 ]; then
+        aaaa_avg=$(echo "${aaaa_times[@]}" | tr ' ' '\n' | awk '{s+=$1}END{printf "%d", s/NR}')
+        aaaa_max=$(echo "${aaaa_times[@]}" | tr ' ' '\n' | sort -n | tail -1)
+    else
+        aaaa_avg="timeout"; aaaa_max="timeout"
+    fi
+
+    # Flag if AAAA is slow (>200ms avg) or much slower than A
+    aaaa_flag=""
+    if [ "$aaaa_avg" = "timeout" ]; then
+        aaaa_flag=" [${RED}AAAA DEAD${RESET}]"
+        DNS_ISSUES=$((DNS_ISSUES + 1))
+    elif [ "$aaaa_avg" -gt 200 ] 2>/dev/null; then
+        aaaa_flag=" [${YELLOW}AAAA SLOW${RESET}]"
+        DNS_ISSUES=$((DNS_ISSUES + 1))
+    fi
+
+    if [ "$a_avg" = "timeout" ]; then
+        echo -e "  [${RED}DEAD${RESET}] $ns  A=timeout  AAAA=timeout"
+        DNS_ISSUES=$((DNS_ISSUES + 1))
+    elif [ "$a_avg" -gt 150 ] 2>/dev/null; then
+        echo -e "  [${YELLOW}SLOW${RESET}] $ns  A=avg ${a_avg}ms max ${a_max}ms  |  AAAA=avg ${aaaa_avg}ms max ${aaaa_max}ms${aaaa_flag}"
+        DNS_ISSUES=$((DNS_ISSUES + 1))
+    else
+        echo -e "  [${GREEN} OK ${RESET}] $ns  A=avg ${a_avg}ms max ${a_max}ms  |  AAAA=avg ${aaaa_avg}ms max ${aaaa_max}ms${aaaa_flag}"
+    fi
+done
+
+if [ "$DNS_ISSUES" -gt 0 ]; then
+    echo ""
+    echo -e "  [${YELLOW}WARN${RESET}] Slow/dead DNS servers add latency to every new connection."
+    echo "  macOS queries all servers in parallel; a slow AAAA response can force"
+    echo "  connections onto a slow IPv6 path even when IPv4 is fast."
+    echo "  Quick test: networksetup -setdnsservers Wi-Fi 10.0.63.3 10.0.2.1 10.0.1.20"
+    echo "  (omits the slow server; revert with: networksetup -setdnsservers Wi-Fi \"Empty\")"
+else
+    echo -e "  [${GREEN} OK ${RESET}] All DNS servers responding within acceptable latency"
+fi
+
+# Check Cisco Umbrella dnscryptproxy (intercepts DNS even when VPN is disconnected)
+if pgrep -f "dnscryptproxy" > /dev/null; then
+    echo ""
+    UMBRELLA_NS=$(ps aux | grep dnscryptproxy | grep -o "resolverAddress=[^ ]*" | cut -d= -f2)
+    echo -e "  [${YELLOW}NOTE${RESET}] Cisco Umbrella dnscryptproxy is running (upstream: ${UMBRELLA_NS:-unknown})"
+    echo "  This proxy is active even when Cisco VPN is disconnected."
+    # Check if its upstream resolv.conf has stale IPv6 entries
+    UMBRELLA_RESOLV="/opt/cisco/secureclient/umbrella/resolv.conf"
+    if [ -f "$UMBRELLA_RESOLV" ]; then
+        STALE_V6=$(grep "fe80::" "$UMBRELLA_RESOLV" 2>/dev/null)
+        if [ -n "$STALE_V6" ]; then
+            echo -e "  [${RED}WARN${RESET}] Stale link-local IPv6 nameserver in Umbrella config: $STALE_V6"
+            echo "  This server is unreachable and will time out on every lookup."
+        fi
+    fi
+fi
+
+# 12. Diagnosis & Recommendations
 echo -e "\n${BOLD}=== 🩺 DIAGNOSIS & RECOMMENDATIONS ===${RESET}\n"
 
 # Overall assessment
 ISSUES_FOUND=0
 
+# Routing table issue (highest priority — this causes hard blackouts)
+if [ "${ROUTING_ISSUE:-0}" -eq 1 ]; then
+    echo ""
+    echo -e "${RED}${BOLD}╔════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${RED}${BOLD}║  ❌  ROUTING TABLE CHURN DETECTED                          ║${RESET}"
+    echo -e "${RED}${BOLD}╠════════════════════════════════════════════════════════════╣${RESET}"
+    echo -e "${RED}║  $DEFAULT_COUNT default routes are competing.                     ║${RESET}"
+    echo -e "${RED}║  Netskope/Cisco periodically swaps utun routes, causing        ║${RESET}"
+    echo -e "${RED}║  ~5-10s 'No route to host' blackouts every 60-90 seconds.      ║${RESET}"
+    echo -e "${RED}║                                                                ║${RESET}"
+    echo -e "${RED}║  Fix: Restart Netskope to flush stale utun interfaces:         ║${RESET}"
+    echo -e "${RED}║    sudo pkill -f NetskopeClientMacAppProxy                    ║${RESET}"
+    echo -e "${RED}║  Then reopen the Netskope Client app.                          ║${RESET}"
+    echo -e "${RED}║                                                                ║${RESET}"
+    echo -e "${RED}║  If it recurs, report to IT: Netskope is leaking utun routes.  ║${RESET}"
+    echo -e "${RED}${BOLD}╚════════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
+    ISSUES_FOUND=1
+fi
+
 if [ -n "$RSSI" ] && [ "$RSSI" -lt -67 ]; then
-    echo -e "${YELLOW}⚠️  Weak signal detected (${RSSI} dBm)${RESET}"
-    echo "   → Try: Moving closer to AP or running ./wifi-reconnect.sh to get better AP"
+    echo ""
+    echo -e "${YELLOW}${BOLD}╔════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${YELLOW}${BOLD}║  ⚠️  Weak Signal Detected (${RSSI} dBm)                      ║${RESET}"
+    echo -e "${YELLOW}${BOLD}╠════════════════════════════════════════════════════════════╣${RESET}"
+    echo -e "${YELLOW}║  → Try: Moving closer to AP                                ║${RESET}"
+    echo -e "${YELLOW}║  → Or run: ./wifi-reconnect.sh to get better AP           ║${RESET}"
+    echo -e "${YELLOW}${BOLD}╚════════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
     ISSUES_FOUND=1
 fi
 
 if [ -n "$AVG_RTT" ]; then
     AVG_INT=$(printf "%.0f" "$AVG_RTT" 2>/dev/null || echo "0")
     if [ "$AVG_INT" -gt 100 ]; then
-        echo -e "${YELLOW}⚠️  High latency detected (${AVG_RTT}ms)${RESET}"
-        echo "   → Possible causes: Channel congestion, weak signal, or AP overload"
-        echo "   → Try: ./wifi-reconnect.sh to get different channel/AP"
+        echo ""
+        echo -e "${YELLOW}${BOLD}╔════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${YELLOW}${BOLD}║  ⚠️  High Latency Detected (${AVG_RTT}ms)                     ║${RESET}"
+        echo -e "${YELLOW}${BOLD}╠════════════════════════════════════════════════════════════╣${RESET}"
+        echo -e "${YELLOW}║  Possible causes:                                          ║${RESET}"
+        echo -e "${YELLOW}║    • Channel congestion                                    ║${RESET}"
+        echo -e "${YELLOW}║    • Weak signal or AP overload                            ║${RESET}"
+        echo -e "${YELLOW}║  → Try: ./wifi-reconnect.sh to get different channel/AP   ║${RESET}"
+        echo -e "${YELLOW}${BOLD}╚════════════════════════════════════════════════════════════╝${RESET}"
+        echo ""
         ISSUES_FOUND=1
     fi
 fi
 
 if [[ "$LOSS" != "0.0%" ]] && [[ -n "$LOSS" ]]; then
-    echo -e "${RED}❌ Packet loss detected (${LOSS})${RESET}"
-    echo "   → This indicates WiFi instability"
-    echo "   → Try: ./wifi-reconnect.sh or check for interference"
+    echo ""
+    echo -e "${RED}${BOLD}╔════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${RED}${BOLD}║  ❌  PACKET LOSS DETECTED (${LOSS})                           ║${RESET}"
+    echo -e "${RED}${BOLD}╠════════════════════════════════════════════════════════════╣${RESET}"
+    echo -e "${RED}║  This indicates WiFi instability!                          ║${RESET}"
+    echo -e "${RED}║                                                            ║${RESET}"
+    echo -e "${RED}║  → Try: ./wifi-reconnect.sh                               ║${RESET}"
+    echo -e "${RED}║  → Or: Check for interference (microwave, Bluetooth)      ║${RESET}"
+    echo -e "${RED}${BOLD}╚════════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
     ISSUES_FOUND=1
 fi
 
 if [ "$ISSUES_FOUND" -eq 0 ]; then
-    echo -e "${GREEN}✅ WiFi connection looks healthy!${RESET}"
+    echo ""
+    echo -e "${GREEN}${BOLD}╔════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${GREEN}${BOLD}║                                                            ║${RESET}"
+    echo -e "${GREEN}${BOLD}║  ✅  WiFi Connection Looks Healthy!                        ║${RESET}"
+    echo -e "${GREEN}${BOLD}║                                                            ║${RESET}"
     if [ -n "$RSSI" ] && [ -n "$AVG_RTT" ]; then
-        echo "   Signal: ${RSSI} dBm, Latency: ${AVG_RTT}ms, Loss: ${LOSS}"
+        printf "${GREEN}${BOLD}║      Signal: %-8s  Latency: %-10s  Loss: %-6s ║${RESET}\n" "${RSSI} dBm" "${AVG_RTT}ms" "${LOSS}"
     fi
+    echo -e "${GREEN}${BOLD}║                                                            ║${RESET}"
+    echo -e "${GREEN}${BOLD}╚════════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
 fi
 
 echo ""

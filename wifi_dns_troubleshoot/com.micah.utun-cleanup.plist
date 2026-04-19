@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    com.micah.utun-cleanup.plist
+    launchd daemon that runs utun-cleanup.sh every 2 minutes as root.
+
+    Install location: /Library/LaunchDaemons/com.micah.utun-cleanup.plist
+    Load with:        sudo launchctl load /Library/LaunchDaemons/com.micah.utun-cleanup.plist
+    Unload with:      sudo launchctl unload /Library/LaunchDaemons/com.micah.utun-cleanup.plist
+
+    LaunchDaemons run as root by default, which is required for `route delete`.
+-->
+<plist version="1.0">
+<dict>
+
+    <!-- Unique reverse-DNS label for this daemon -->
+    <key>Label</key>
+    <string>com.micah.utun-cleanup</string>
+
+    <!-- Full path to the cleanup script -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/utun-cleanup.sh</string>
+    </array>
+
+    <!-- Run once immediately when loaded, then on the interval below -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Repeat every 120 seconds (2 minutes) -->
+    <key>StartInterval</key>
+    <integer>120</integer>
+
+    <!-- Append stdout to the log file -->
+    <key>StandardOutPath</key>
+    <string>/var/log/utun-cleanup.log</string>
+
+    <!-- Append stderr to the same log file -->
+    <key>StandardErrorPath</key>
+    <string>/var/log/utun-cleanup.log</string>
+
+</dict>
+</plist>
