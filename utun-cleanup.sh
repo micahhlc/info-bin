@@ -15,15 +15,20 @@
 #   No hardcoded number ranges. utun0, utun1, utun2 are dead → cleaned too.
 #
 # Usage: run as root (via launchd or: sudo ./utun-cleanup.sh)
+#        sudo ./utun-cleanup.sh --force   remove ALL utun default routes, even active ones
 # Log:   /var/log/utun-cleanup.log
 #
 
 LOG=/var/log/utun-cleanup.log
 SCRIPT_NAME="utun-cleanup"
+FORCE=0
+[[ "${1:-}" == "--force" ]] && FORCE=1
 
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') [$SCRIPT_NAME] $*" >> "$LOG"
 }
+
+log "Script started${FORCE:+ (--force mode)}"
 
 # ------------------------------------------------------------
 # Helper: list utunN interfaces that have a default route for
@@ -60,9 +65,14 @@ cleaned=0
 
 for iface in "${all_candidate_utuns[@]}"; do
 
-    # ALIVE — has an IPv4 address assigned, skip it.
+    # ALIVE — has an IPv4 address assigned, skip unless --force.
     if ifconfig "$iface" 2>/dev/null | grep -q '^\s*inet '; then
-        continue
+        if (( FORCE )); then
+            log "FORCE removing active utun $iface (--force mode)"
+        else
+            log "SKIP $iface: has IPv4 address, leaving alone"
+            continue
+        fi
     fi
 
     # DEAD — no inet address. Remove stale default routes.
@@ -91,6 +101,46 @@ done
 
 if (( cleaned > 0 )); then
     log "Done. Removed $cleaned stale default route(s)."
+fi
+
+# ------------------------------------------------------------
+# 3. Destroy dead utun interfaces (no inet addr, no owner).
+#    In --force mode, also destroys active ones except the
+#    highest-numbered (assumed to be the live VPN tunnel).
+# ------------------------------------------------------------
+destroyed=0
+all_utuns=()
+while IFS= read -r iface; do
+    all_utuns+=("$iface")
+done < <(ifconfig -l | tr ' ' '\n' | grep -E '^utun[0-9]+$' | sort -t n -k 1.5 -n)
+
+highest_active=""
+for iface in "${all_utuns[@]}"; do
+    if ifconfig "$iface" 2>/dev/null | grep -q '^\s*inet '; then
+        highest_active="$iface"
+    fi
+done
+
+for iface in "${all_utuns[@]}"; do
+    has_inet=0
+    ifconfig "$iface" 2>/dev/null | grep -q '^\s*inet ' && has_inet=1
+
+    if (( has_inet )); then
+        if (( FORCE )) && [[ "$iface" != "$highest_active" ]]; then
+            log "FORCE destroying active utun $iface"
+        else
+            continue
+        fi
+    fi
+
+    if ifconfig "$iface" destroy 2>/dev/null; then
+        log "DESTROY dead utun interface $iface"
+        destroyed=$(( destroyed + 1 ))
+    fi
+done
+
+if (( destroyed > 0 )); then
+    log "Done. Destroyed $destroyed dead utun interface(s)."
 fi
 
 exit 0

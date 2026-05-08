@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # info-bin — Claude Code Context
 
 ## What this repo is
@@ -80,6 +84,8 @@ sudo ./wifi-reconnect.sh
 | `wifi_dns_troubleshoot/disable-ipv6-permanent.sh` | 3-layer IPv6 disable |
 | `wifi-diagnostic.sh` | Full health check |
 | `wifi-reconnect.sh` | Full manual network reset |
+| `macbook-battery.sh` | Battery + charging status with range checks (Mac14,7 M2 specs) |
+| `ipad-battery.sh` | iPad battery info via libimobiledevice (requires USB) |
 
 ---
 
@@ -87,6 +93,10 @@ sudo ./wifi-reconnect.sh
 
 - **DNS corruption on Cisco VPN connect/disconnect** — exact mechanism not yet identified. Need to capture `scutil --dns` before and immediately after VPN connect to catch what gets injected.
 - **IT ticket pending response** — filed for Netskope utun leak bug (126.0.9.2460). Awaiting version check + AOAC config review.
+
+## Resolved issues
+
+- **Zoom app fails on WFH + Cisco VPN** — **RESOLVED 2026-04-28.** Root cause: Netskope performs SSL inspection on `zoom.us` when on corporate network (Cisco VPN active), re-signing TLS cert with `ca.rak.goskope.com`. Zoom app uses cert pinning and rejects it. IT added `zoom.us` + `zoom.com` to `nsbypass.json` (rowID 5626, mode:direct) in the Netskope admin console. Confirmed working.
 
 ---
 
