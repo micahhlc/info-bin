@@ -32,6 +32,12 @@
     <key>StartInterval</key>
     <integer>120</integer>
 
+    <!-- Also trigger on network changes (VPN connect/disconnect) -->
+    <key>WatchPaths</key>
+    <array>
+        <string>/var/run/resolv.conf</string>
+    </array>
+
     <!-- Append stdout to the log file -->
     <key>StandardOutPath</key>
     <string>/var/log/utun-cleanup.log</string>

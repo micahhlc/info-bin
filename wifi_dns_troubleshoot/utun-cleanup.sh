@@ -8,6 +8,7 @@
 #   Netskope and Cisco VPN each create utun interfaces on connect and leave
 #   behind stale default routes on disconnect. The kernel cycles through all
 #   default routes, dropping packets each time it hits a dead one.
+#   identityservicesd (iMessage/Handoff) also leaks utun interfaces over time.
 #
 # Liveness rule (the only guard that matters):
 #   A utun is ALIVE if ifconfig shows an "inet " address on it.
@@ -16,19 +17,26 @@
 #
 # Usage: run as root (via launchd or: sudo ./utun-cleanup.sh)
 #        sudo ./utun-cleanup.sh --force   remove ALL utun default routes, even active ones
+#        sudo ./utun-cleanup.sh --reset   kill ghost utun owners so launchd can restart them clean
 # Log:   /var/log/utun-cleanup.log
 #
 
 LOG=/var/log/utun-cleanup.log
 SCRIPT_NAME="utun-cleanup"
 FORCE=0
+RESET=0
 [[ "${1:-}" == "--force" ]] && FORCE=1
+[[ "${1:-}" == "--reset" || "${2:-}" == "--reset" ]] && RESET=1
 
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') [$SCRIPT_NAME] $*" >> "$LOG"
 }
 
-log "Script started${FORCE:+ (--force mode)}"
+_mode=""
+(( FORCE )) && _mode+=" (--force mode)"
+(( RESET )) && _mode+=" (--reset mode)"
+log "Script started${_mode}"
+unset _mode
 
 # ------------------------------------------------------------
 # Helper: list utunN interfaces that have a default route for
@@ -104,43 +112,49 @@ if (( cleaned > 0 )); then
 fi
 
 # ------------------------------------------------------------
-# 3. Destroy dead utun interfaces (no inet addr, no owner).
-#    In --force mode, also destroys active ones except the
-#    highest-numbered (assumed to be the live VPN tunnel).
+# 3. --reset mode: kill all processes owning utun interfaces
+#    except the active VPN tunnel. They restart via launchd.
+#    Run manually when ghost utun interfaces accumulate.
+#    Note: ifconfig utunN destroy is rejected by the kernel for
+#    process-owned utun interfaces (SIOCIFDESTROY: Invalid argument).
+#    The only way to release them is to kill the owning process.
 # ------------------------------------------------------------
-destroyed=0
-all_utuns=()
-while IFS= read -r iface; do
-    all_utuns+=("$iface")
-done < <(ifconfig -l | tr ' ' '\n' | grep -E '^utun[0-9]+$' | sort -t n -k 1.5 -n)
+if (( RESET )); then
 
-highest_active=""
-for iface in "${all_utuns[@]}"; do
-    if ifconfig "$iface" 2>/dev/null | grep -q '^\s*inet '; then
-        highest_active="$iface"
-    fi
-done
+    # Find active VPN: highest-numbered utun with an inet address
+    active_utun=""
+    for iface in $(ifconfig -l | tr ' ' '\n' | grep -E '^utun[0-9]+$' \
+                   | sort -t n -k 1.5 -rn); do
+        if ifconfig "$iface" 2>/dev/null | grep -q '^\s*inet '; then
+            active_utun="$iface"
+            break
+        fi
+    done
+    log "Active VPN tunnel: ${active_utun:-none}"
 
-for iface in "${all_utuns[@]}"; do
-    has_inet=0
-    ifconfig "$iface" 2>/dev/null | grep -q '^\s*inet ' && has_inet=1
+    before=$(ifconfig -l | tr ' ' '\n' | grep -cE '^utun[0-9]+$')
+    killed=0
 
-    if (( has_inet )); then
-        if (( FORCE )) && [[ "$iface" != "$highest_active" ]]; then
-            log "FORCE destroying active utun $iface"
-        else
+    while IFS= read -r line; do
+        proc=$(awk '{print $1}' <<< "$line")
+        pid=$(awk '{print $2}' <<< "$line")
+        # lsof reports "unit N" where N maps to utunN-1 (unit 1 = utun0, etc.)
+        unit=$(grep -oE 'unit [0-9]+' <<< "$line" | grep -oE '[0-9]+')
+        iface="utun$(( unit - 1 ))"
+
+        # Skip owner of active VPN tunnel
+        if [[ "$iface" == "$active_utun" ]]; then
+            log "SKIP $proc (PID $pid): owns active VPN $active_utun"
             continue
         fi
-    fi
 
-    if ifconfig "$iface" destroy 2>/dev/null; then
-        log "DESTROY dead utun interface $iface"
-        destroyed=$(( destroyed + 1 ))
-    fi
-done
+        log "KILL $proc (PID $pid) owns $iface — launchd will restart"
+        kill -SIGTERM "$pid" 2>/dev/null && killed=$(( killed + 1 ))
+    done < <(lsof 2>/dev/null | grep "utun_control" | sort -k2,2 -u)
 
-if (( destroyed > 0 )); then
-    log "Done. Destroyed $destroyed dead utun interface(s)."
+    sleep 2
+    after=$(ifconfig -l | tr ' ' '\n' | grep -cE '^utun[0-9]+$')
+    log "--reset done. Killed $killed process(es). utun count: $before → $after"
 fi
 
 exit 0
