@@ -38,11 +38,13 @@ AIRPORT=/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/
 CURRENT_CHANNEL=$("$AIRPORT" -I 2>/dev/null | awk '/channel:/{print $2}')
 CURRENT_SSID=$("$AIRPORT" -I 2>/dev/null | awk '/^ SSID:/{print $2}')
 CURRENT_RSSI=$("$AIRPORT" -I 2>/dev/null | awk '/agrCtlRSSI:/{print $2}')
+CURRENT_DNS=$(scutil --dns 2>/dev/null | awk '/nameserver\[/{print $3}' | sort -u | tr '\n' ' ')
 
 echo "Before:"
-echo "  SSID:    ${CURRENT_SSID:-unknown}"
-echo "  Channel: ${CURRENT_CHANNEL:-unknown}"
-echo "  Signal:  ${CURRENT_RSSI:-unknown} dBm"
+echo "  SSID:        ${CURRENT_SSID:-unknown}"
+echo "  Channel:     ${CURRENT_CHANNEL:-unknown}"
+echo "  Signal:      ${CURRENT_RSSI:-unknown} dBm"
+echo "  DNS servers: ${CURRENT_DNS:-unknown}"
 
 # ---------------------------------------------------------------
 # 1. Flush stale Netskope utun default routes
@@ -140,22 +142,57 @@ echo "  Waiting 10s for association..."
 sleep 10
 
 # ---------------------------------------------------------------
-# 4. Flush DNS cache
+# 4. Reset DNS configuration (remove injected nameservers)
 # ---------------------------------------------------------------
-step "4. Flush DNS cache"
+step "4. Reset DNS configuration"
+
+# Known-bad entries injected by Cisco VPN / Netskope
+BAD_DNS_PATTERNS=("10.0.63.4" "fe80::")
+
+DNS_FIXED=0
+while IFS= read -r svc; do
+    [[ "$svc" == \** ]] && continue
+    current_servers=$(networksetup -getdnsservers "$svc" 2>/dev/null)
+    # Skip if already empty / DHCP-only
+    [[ "$current_servers" == *"There aren't any DNS Servers"* ]] && continue
+
+    needs_reset=0
+    for bad in "${BAD_DNS_PATTERNS[@]}"; do
+        if echo "$current_servers" | grep -q "$bad"; then
+            needs_reset=1
+            break
+        fi
+    done
+
+    if [[ $needs_reset -eq 1 ]]; then
+        networksetup -setdnsservers "$svc" Empty 2>/dev/null && \
+            ok "Cleared injected DNS from: $svc" || warn "Could not clear DNS on: $svc"
+        DNS_FIXED=$(( DNS_FIXED + 1 ))
+    fi
+done < <(networksetup -listallnetworkservices 2>/dev/null | tail -n +2)
+
+if [[ $DNS_FIXED -eq 0 ]]; then
+    ok "No injected DNS entries found"
+fi
+
+# ---------------------------------------------------------------
+# 5. Flush DNS cache
+# ---------------------------------------------------------------
+step "5. Flush DNS cache"
 
 dscacheutil -flushcache 2>/dev/null && \
     killall -HUP mDNSResponder 2>/dev/null && \
     ok "DNS cache flushed" || warn "Could not flush DNS cache"
 
 # ---------------------------------------------------------------
-# 5. Results
+# 6. Results
 # ---------------------------------------------------------------
-step "5. Results"
+step "6. Results"
 
 NEW_CHANNEL=$("$AIRPORT" -I 2>/dev/null | awk '/channel:/{print $2}')
 NEW_SSID=$("$AIRPORT" -I 2>/dev/null | awk '/^ SSID:/{print $2}')
 NEW_RSSI=$("$AIRPORT" -I 2>/dev/null | awk '/agrCtlRSSI:/{print $2}')
+NEW_DNS=$(scutil --dns 2>/dev/null | awk '/nameserver\[/{print $3}' | sort -u | tr '\n' ' ')
 DEFAULT_COUNT=$(netstat -nr 2>/dev/null | grep -c "^default" || echo "?")
 
 echo ""
@@ -168,6 +205,11 @@ else
 fi
 echo "  Signal:         ${NEW_RSSI:-unknown} dBm"
 echo "  Default routes: ${DEFAULT_COUNT}"
+if [[ "$NEW_DNS" != "$CURRENT_DNS" ]]; then
+    echo -e "  DNS servers:    ${GREEN}${NEW_DNS:-unknown}${RESET} (changed)"
+else
+    echo "  DNS servers:    ${NEW_DNS:-unknown} (unchanged)"
+fi
 
 echo ""
 # Quick connectivity check
