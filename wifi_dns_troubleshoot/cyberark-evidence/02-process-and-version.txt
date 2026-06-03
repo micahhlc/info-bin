@@ -1,0 +1,67 @@
+=== CyberArk Processes ===
+root               569 106.1  0.2 409953408  36608   ??  Rs   25May26 762:49.10 /Library/SystemExtensions/C6CCA74D-3D6C-4CD9-8CDD-DA084E0D6640/com.cyberark.CyberArkEPMEndpointSecurityExtension.systemextension/Contents/MacOS/com.cyberark.CyberArkEPMEndpointSecurityExtension
+micah.cheng       2650   0.0  0.2 409410288  28016   ??  S     4:57PM   0:00.34 /Applications/CyberArk EPM.app/Contents/MacOS/CyberArk EPM
+micah.cheng       1244   0.0  0.1 408297520   8960   ??  Ss   25May26   0:02.79 /Applications/CyberArk EPM.app/Contents/PlugIns/CyberArkEPMFinderSyncExtension.appex/Contents/MacOS/CyberArkEPMFinderSyncExtension -AppleLanguages ("en-JP", "ja-JP", "en-US", "zh-Hant-JP")
+micah.cheng       1027   0.0  0.1 410270800  21984   ??  S    25May26   0:23.25 /Applications/CyberArk EPM.app/Contents/MachServices/CyberArkEPMUIAgent.app/Contents/MacOS/CyberArkEPMUIAgent
+root               648   0.0  0.0 409123840   3824   ??  Ss   25May26   0:01.40 /Applications/CyberArk EPM.app/Contents/MachServices/CyberArkEPMWebServiceSession.app/Contents/MacOS/CyberArkEPMWebServiceSession
+
+=== Installed Package ===
+cyberark
+
+=== Version (Info.plist) ===
+23.2.0
+
+=== System Extension ===
+total 0
+drwxr-xr-x  3 root  wheel   96 Oct 30  2023 .
+drwxr-xr-x  9 root  wheel  288 Jun  1 16:56 ..
+drwxr-xr-x  3 root  wheel   96 Feb 21  2023 com.cyberark.CyberArkEPMEndpointSecurityExtension.systemextension
+
+=== LaunchDaemons ===
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.cyberark.CyberArkEPMPrivilegedHelper</string>
+	<key>LaunchEvents</key>
+	<dict>
+		<key>com.apple.notifyd.matching</key>
+		<dict>
+			<key>EndpointSecurityExtensionDidTerminate</key>
+			<dict>
+				<key>Notification</key>
+				<string>com.cyberark.EPM.EndpointSecurityExtensionDidTerminate</string>
+			</dict>
+		</dict>
+	</dict>
+	<key>MachServices</key>
+	<dict>
+		<key>com.cyberark.CyberArkEPMPrivilegedHelper</key>
+		<true/>
+	</dict>
+	<key>Program</key>
+	<string>/Library/PrivilegedHelperTools/com.cyberark.CyberArkEPMPrivilegedHelper</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Library/PrivilegedHelperTools/com.cyberark.CyberArkEPMPrivilegedHelper</string>
+	</array>
+</dict>
+</plist>
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.cyberark.CyberArkEPMWebServiceSession</string>
+	<key>MachServices</key>
+	<dict>
+		<key>com.cyberark.CyberArkEPMWebServiceSession</key>
+		<true/>
+	</dict>
+	<key>Program</key>
+	<string>/Applications/CyberArk EPM.app/Contents/MachServices/CyberArkEPMWebServiceSession.app/Contents/MacOS/CyberArkEPMWebServiceSession</string>
+</dict>
+</plist>
+
+=== JAMF Receipt ===

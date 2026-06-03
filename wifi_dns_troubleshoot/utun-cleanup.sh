@@ -17,9 +17,12 @@
 #   Dead utuns: routes removed, owning process killed (launchd restarts clean).
 #
 # Usage: run as root (via launchd or: sudo ./utun-cleanup.sh)
-#        sudo ./utun-cleanup.sh --force   remove ALL utun default routes, even active ones
+#        sudo ./utun-cleanup.sh --force   remove ALL utun default routes, even active ones;
+#                                         also kills known VPN daemons if no live utuns exist
 #        sudo ./utun-cleanup.sh --reset   (legacy alias — interface cleanup now runs every cycle)
 # Log:   /var/log/utun-cleanup.log
+#
+# Every run also: flushes DNS cache, reloads mDNSResponder, removes stale /etc/resolver/ files.
 #
 
 LOG=/var/log/utun-cleanup.log
@@ -187,17 +190,75 @@ for pid in $unique_pids; do
         continue
     fi
     [[ -z "$dead_ifaces" ]] && continue
+    # rapportd (AirDrop/Handoff) and identityservicesd (iMessage/FaceTime) use
+    # IPv6-only utuns legitimately — killing them breaks Apple features with no benefit.
+    # Their stale routes are already removed above; just leave the processes alone.
+    if [[ "$proc" == "rapportd" || "$proc" == "identitys" ]]; then
+        log "SKIP $proc (PID $pid): Apple system process, routes cleaned but process preserved"
+        continue
+    fi
     log "KILL $proc (PID $pid) owns only dead utun(s):$dead_ifaces — launchd will restart"
     kill -SIGTERM "$pid" 2>/dev/null && killed=$(( killed + 1 ))
 done
 
 if (( destroyed > 0 || killed > 0 )); then
     sleep 2
-    after=$(ifconfig -l | tr ' ' '\n' | grep -cE '^utun[0-9]+$')
-    log "Interface cleanup done. Destroyed $destroyed, killed $killed process(es). utun count: $before → $after"
-elif (( before > 4 )); then
-    after=$(ifconfig -l | tr ' ' '\n' | grep -cE '^utun[0-9]+$')
-    log "WARN: $before dead utun(s) present but none removed (system extension sandboxing may block access). utun count unchanged: $after"
 fi
+
+# 3c. ifconfig down fallback — for dead utuns still present after destroy/kill,
+#     bring them administratively down so the kernel stops routing through them.
+downed=0
+for iface in $(ifconfig -l | tr ' ' '\n' | grep -E '^utun[0-9]+$'); do
+    is_active "$iface" && continue
+    if ifconfig "$iface" down 2>/dev/null; then
+        log "DOWN $iface (destroy unavailable, brought interface down)"
+        downed=$(( downed + 1 ))
+    fi
+done
+
+# 3d. Known-process kill — lsof is blind to sandboxed system extensions on Sonoma.
+#     Only kill known VPN daemons when no active utuns exist (safe to restart all).
+if [[ -z "$active_utuns_list" ]]; then
+    for proc_pattern in "vpnagentd" "acumbrellaagent" "NetskopeClientMacAppProxy"; do
+        pid=$(pgrep -x "$proc_pattern" 2>/dev/null)
+        [[ -z "$pid" ]] && pid=$(pgrep -f "$proc_pattern" 2>/dev/null | head -1)
+        [[ -z "$pid" ]] && continue
+        log "KILL $proc_pattern (PID $pid) — no active utuns, safe to restart"
+        kill -SIGTERM "$pid" 2>/dev/null && killed=$(( killed + 1 ))
+    done
+fi
+
+after=$(ifconfig -l | tr ' ' '\n' | grep -cE '^utun[0-9]+$')
+if (( destroyed > 0 || killed > 0 || downed > 0 )); then
+    log "Interface cleanup done. Destroyed $destroyed, downed $downed, killed $killed process(es). utun count: $before → $after"
+elif (( before > 0 )); then
+    log "WARN: $before dead utun(s) present but none removed (system extension sandboxing may block). utun count unchanged: $after"
+fi
+
+# ------------------------------------------------------------
+# 4. DNS cleanup — always runs after interface sweep.
+#    - Remove stale /etc/resolver/ files for dead utun interfaces.
+#    - Flush DNS cache and signal mDNSResponder to reload.
+#    - Log surviving nameservers for diagnostics.
+# ------------------------------------------------------------
+dns_removed=0
+if [[ -d /etc/resolver ]]; then
+    for rfile in /etc/resolver/*; do
+        [[ -f "$rfile" ]] || continue
+        rbase=$(basename "$rfile")
+        if echo "$rbase" | grep -qE '^utun[0-9]+$'; then
+            if ! is_active "$rbase"; then
+                log "REMOVE stale resolver file /etc/resolver/$rbase"
+                rm -f "$rfile" && dns_removed=$(( dns_removed + 1 ))
+            fi
+        fi
+    done
+fi
+
+dscacheutil -flushcache 2>/dev/null && log "DNS cache flushed (dscacheutil)"
+killall -HUP mDNSResponder 2>/dev/null && log "mDNSResponder reloaded"
+
+ns_list=$(scutil --dns 2>/dev/null | awk '/nameserver/{print $3}' | sort -u | tr '\n' ' ')
+log "DNS nameservers after cleanup: ${ns_list:-none}"
 
 exit 0

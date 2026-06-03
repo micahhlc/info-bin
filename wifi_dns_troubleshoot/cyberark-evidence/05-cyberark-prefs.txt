@@ -1,0 +1,10 @@
+=== com.cyberark.CyberArkEPM.plist ===
+{
+  "PolicyUpdateDate" => 2023-11-05 15:55:43 +0000
+}
+
+=== com.cyberark.CyberArkEPMLCDModule.plist ===
+{
+  "LCDInterval" => "MjAyNi0wNS0yNVQxNDoxMjoxNy42NTUrMDk6MDA="
+  "LCDPolicy" => "37f155aec1fda7aae24eb1c0c614804b2ca2d3f0"
+}

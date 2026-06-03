@@ -1,0 +1,4 @@
+NOTE: Full kernel extension logs require sudo. Run this to get complete logs:
+  sudo log show --predicate 'process contains "cyberark" OR process contains "CyberArk" OR process contains "EPM"' --last 2h > 03-syslog-cyberark.txt
+
+=== Available without sudo ===

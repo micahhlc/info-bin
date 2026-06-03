@@ -1,0 +1,40 @@
+=== Collection time: Mon Jun  1 17:06:34 JST 2026 ===
+
+=== Default routes ===
+default            10.49.167.254      UGScg                 en0       
+
+=== DNS resolvers ===
+  search domain[0] : intra.rakuten.co.jp
+  nameserver[0] : 10.0.63.3
+  nameserver[1] : 10.0.63.4
+  nameserver[2] : 10.0.2.1
+  nameserver[3] : 10.0.1.20
+  if_index : 12 (en0)
+  search domain[0] : intra.rakuten.co.jp
+  nameserver[0] : 10.0.63.3
+  nameserver[1] : 10.0.63.4
+  nameserver[2] : 10.0.2.1
+  nameserver[3] : 10.0.1.20
+  if_index : 12 (en0)
+
+=== WiFi signal ===
+     agrCtlRSSI: -55
+    agrCtlNoise: -96
+        channel: 112
+
+=== Top CPU at collection ===
+  569 107.7 /Library/SystemExtensions/C6CCA74D-3D6C-4CD9-8CDD-DA084E0D6640/com.cyberark.CyberArkEPMEndpointSecurityExtension.systemextension/Contents/MacOS/com.cyberark.CyberArkEPMEndpointSecurityExtension
+71339  66.2 claude
+  375  37.8 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer
+ 8483  16.9 /System/Library/Frameworks/AppKit.framework/Versions/C/XPCServices/com.apple.appkit.xpc.openAndSavePanelService.xpc/Contents/MacOS/com.apple.appkit.xpc.openAndSavePanelService
+  543   5.1 /Library/Application Support/JAMF/Jamf.app/Contents/MacOS/JamfDaemon.app/Contents/MacOS/JamfDaemon
+  420   4.0 /usr/libexec/ApplicationFirewall/socketfilterfw
+ 8177   3.9 /System/Library/Frameworks/QuickLookThumbnailing.framework/Versions/A/PlugIns/ThumbnailExtension_macOS.appex/Contents/MacOS/ThumbnailExtension_macOS
+  426   3.7 /usr/libexec/trustd
+  345   3.7 /usr/libexec/opendirectoryd
+ 2738   3.1 /Applications/Self Service+.app/Contents/MacOS/Self Service+
+23773   2.7 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+ 8080   2.3 /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/148.0.7778.181/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer)
+61145   2.2 /Library/SystemExtensions/F37D60C0-B880-4619-BEE4-9318A59B9C4A/com.netskope.client.Netskope-Client.NetskopeClientMacAppProxy.systemextension/Contents/MacOS/com.netskope.client.Netskope-Client.NetskopeClientMacAppProxy
+  316   1.5 /usr/libexec/configd
+  507   1.4 /usr/libexec/TouchBarServer

@@ -1,0 +1,109 @@
+Date/Time:        2026-05-29 16:35:02.017 +0900
+End time:         2026-05-29 16:37:02.411 +0900
+OS Version:       macOS 14.3.1 (Build 23D60)
+Architecture:     arm64e
+Report Version:   44
+Incident Identifier: D35F95DA-EBC5-40BE-A4D4-F58850FD0A3E
+
+Data Source:      Microstackshots
+Shared Cache:     C32B200E-CF99-3583-BC9F-B7FB11382E8F slid base address 0x189170000, slide 0x9170000
+
+Command:          com.cyberark.CyberArkEPMEndpointSecurityExtension
+Path:             /Library/SystemExtensions/*/com.cyberark.CyberArkEPMEndpointSecurityExtension
+Identifier:       com.cyberark.CyberArkEPMEndpointSecurityExtension
+Version:          23.2.0 (86)
+Team ID:          DF8U2CCCD8
+Resource Coalition ID: 539
+Architecture:     arm64
+Parent:           UNKNOWN [1]
+PID:              569
+
+Event:            cpu usage
+Action taken:     none
+CPU:              90 seconds cpu time over 120 seconds (75% cpu average), exceeding limit of 50% cpu over 180 seconds
+CPU limit:        90s
+Limit duration:   180s
+CPU used:         90s
+CPU duration:     120s
+Duration:         120.39s
+Duration Sampled: 89.56s
+Steps:            31
+
+Hardware model:   Mac14,7
+Active cpus:      8
+HW page size:     16384
+VM page size:     16384
+
+Fan speed:        0 rpm
+Advisory levels:  Battery -> 3, User -> 2, ThermalPressure -> 0, Combined -> 2
+Free disk space:  24.81 GB/228.27 GB, low space threshold 3072 MB
+Vnodes Available: 84.33% (212270/251702)
+
+Preferred User Language: en-JP, ja-JP
+Country Code:     JP
+Keyboards:        ABC
+OS Cryptex File Extents: 176
+
+Heaviest stack for the target process:
+  30  start_wqthread + 8 (libsystem_pthread.dylib + 7728) [0x1895a8e30]
+  30  _pthread_wqthread + 228 (libsystem_pthread.dylib + 12504) [0x1895aa0d8]
+  30  _dispatch_worker_thread2 + 156 (libdispatch.dylib + 88580) [0x18940ea04]
+  30  _dispatch_root_queue_drain + 392 (libdispatch.dylib + 86516) [0x18940e1f4]
+  30  _dispatch_async_redirect_invoke + 584 (libdispatch.dylib + 25572) [0x1893ff3e4]
+  30  _dispatch_continuation_pop + 600 (libdispatch.dylib + 28104) [0x1893ffdc8]
+  30  _dispatch_client_callout + 20 (libdispatch.dylib + 14608) [0x1893fc910]
+  30  _dispatch_call_block_and_release + 32 (libdispatch.dylib + 7352) [0x1893facb8]
+  30  ??? (com.cyberark.CyberArkEPMEndpointSecurityExtension + 11868) [0x102cf6e5c]
+  30  ??? (com.cyberark.CyberArkEPMEndpointSecurityExtension + 79264) [0x102d075a0]
+  30  ??? (CyberArkEPMEngine + 477580) [0x103e0898c]
+  30  ??? (CyberArkEPMEngine + 123512) [0x103db2278]
+  30  ??? (CyberArkEPMEngine + 500440) [0x103e0e2d8]
+  30  ??? (CyberArkEPMEngine + 3427000) [0x1040d8ab8]
+  30  ??? (CyberArkEPMEngine + 3526776) [0x1040f1078]
+  24  ??? (CyberArkEPMFoundation + 234752) [0x1033a9500]
+
+
+Powerstats for:   com.cyberark.CyberArkEPMEndpointSecurityExtension (com.cyberark.CyberArkEPMEndpointSecurityExtension) [569]
+UUID:             D460C19A-0AE9-3D02-85C4-C7464CDFA2C2
+Path:             /Library/SystemExtensions/*/com.cyberark.CyberArkEPMEndpointSecurityExtension
+Identifier:       com.cyberark.CyberArkEPMEndpointSecurityExtension
+Version:          23.2.0 (86)
+Team ID:          DF8U2CCCD8
+Resource Coalition ID: 539
+Architecture:     arm64
+Parent:           UNKNOWN [1]
+UID:              0
+Footprint:        43.98 MB -> 45.59 MB (+1648 KB) (max 46.67 MB )
+Pageins:          6 pages
+Start time:       2026-05-29 16:35:32.708 +0900
+End time:         2026-05-29 16:37:02.265 +0900
+Num samples:      31 (100%)
+Primary state:    30 samples Non-Frontmost App, Non-Suppressed, User mode, Effective Thread QoS User Initiated, Requested Thread QoS User Initiated, Override Thread QoS Unspecified
+User Activity:    0 samples Idle, 31 samples Active
+Power Source:     0 samples on Battery, 31 samples on AC
+  30  start_wqthread + 8 (libsystem_pthread.dylib + 7728) [0x1895a8e30]
+    30  _pthread_wqthread + 228 (libsystem_pthread.dylib + 12504) [0x1895aa0d8]
+      30  _dispatch_worker_thread2 + 156 (libdispatch.dylib + 88580) [0x18940ea04]
+        30  _dispatch_root_queue_drain + 392 (libdispatch.dylib + 86516) [0x18940e1f4]
+          30  _dispatch_async_redirect_invoke + 584 (libdispatch.dylib + 25572) [0x1893ff3e4]
+            30  _dispatch_continuation_pop + 600 (libdispatch.dylib + 28104) [0x1893ffdc8]
+              30  _dispatch_client_callout + 20 (libdispatch.dylib + 14608) [0x1893fc910]
+                30  _dispatch_call_block_and_release + 32 (libdispatch.dylib + 7352) [0x1893facb8]
+                  30  ??? (com.cyberark.CyberArkEPMEndpointSecurityExtension + 11868) [0x102cf6e5c]
+                    30  ??? (com.cyberark.CyberArkEPMEndpointSecurityExtension + 79264) [0x102d075a0]
+                      30  ??? (CyberArkEPMEngine + 477580) [0x103e0898c]
+                        30  ??? (CyberArkEPMEngine + 123512) [0x103db2278]
+                          30  ??? (CyberArkEPMEngine + 500440) [0x103e0e2d8]
+                            30  ??? (CyberArkEPMEngine + 3427000) [0x1040d8ab8]
+                              30  ??? (CyberArkEPMEngine + 3526776) [0x1040f1078]
+                                24  ??? (CyberArkEPMFoundation + 234752) [0x1033a9500]
+                                6   ??? (CyberArkEPMFoundation + 234764) [0x1033a950c]
+  1   start_wqthread + 0 (libsystem_pthread.dylib + 7720) [0x1895a8e28]
+    1   <Kernel mode, Effective Thread QoS Unspecified, Requested Thread QoS Unspecified>
+
+  Binary Images:
+           0x102cf4000 -        0x102d1bfff  com.cyberark.CyberArkEPMEndpointSecurityExtension 23.2.0 (86) <D460C19A-0AE9-3D02-85C4-C7464CDFA2C2>  /Library/SystemExtensions/*/com.cyberark.CyberArkEPMEndpointSecurityExtension
+           0x103370000 -        0x103433fff  com.cyberark.CyberArkEPMFoundation 23.2.0 (86)                <49E83801-DDD1-33B5-8440-F40195A5B7F4>  /Users/Shared/Install CyberArk EPM.app/Contents/Frameworks/CyberArkEPMFoundation.framework/Versions/A/CyberArkEPMFoundation
+           0x103d94000 -        0x1042dbfff  com.cyberark.CyberArkEPMEngine 23.2.0 (86)                    <9C244B3F-85C6-3544-BB33-DA84A2A3870F>  /Users/Shared/Install CyberArk EPM.app/Contents/Frameworks/CyberArkEPMEngine.framework/Versions/A/CyberArkEPMEngine
+           0x1893f9000 -        0x18943ffff  libdispatch.dylib (1462.80.1)                                 <5AA1649C-EF1D-39F7-A66C-4C5D2E53C474>  /usr/lib/system/libdispatch.dylib
+           0x1895a7000 -        0x1895b3ff3  libsystem_pthread.dylib (519)                                 <449BBAD3-F7EF-371D-9A59-FD4FFA78289B>  /usr/lib/system/libsystem_pthread.dylib
